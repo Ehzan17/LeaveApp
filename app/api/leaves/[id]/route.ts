@@ -1,0 +1,116 @@
+import { NextRequest, NextResponse } from "next/server";
+import clientPromise from "@/lib/mongodb";
+import { requireRole } from "@/lib/roleGuard";
+import { ObjectId } from "mongodb";
+import { generateLeaveLetter } from "@/lib/pdfGenerator";
+import { sendLeaveEmail } from "@/lib/emailSender";
+import { logActivity } from "@/lib/activityLogger";
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const auth = requireRole(req, ["principal"]);
+  if (auth instanceof NextResponse) return auth;
+
+  try {
+    const id = params.id;
+    const { status } = await req.json();
+
+    if (!status || !["approved", "rejected"].includes(status)) {
+      return NextResponse.json(
+        { message: "Status must be approved or rejected" },
+        { status: 400 }
+      );
+    }
+
+    const client = await clientPromise;
+    const db = client.db("teacher_leave_portal");
+
+    const leave = await db.collection("leaves").findOne({
+      _id: new ObjectId(id),
+    });
+
+    if (!leave) {
+      return NextResponse.json(
+        { message: "Leave request not found" },
+        { status: 404 }
+      );
+    }
+
+    if (leave.status !== "pending") {
+      return NextResponse.json(
+        { message: "Leave already reviewed" },
+        { status: 400 }
+      );
+    }
+
+    // Fetch teacher
+    const teacher = await db.collection("users").findOne({
+      _id: leave.userId,
+    });
+
+    if (!teacher) {
+      return NextResponse.json(
+        { message: "Teacher not found" },
+        { status: 404 }
+      );
+    }
+
+    // Generate reference ID
+    const referenceId = `REF-${Date.now()}`;
+
+    // Generate PDF
+    const pdfUrl = await generateLeaveLetter({
+      teacherName: teacher.name,
+      teacherEmail: teacher.email,
+      department: teacher.department,
+      fromDate: leave.from,
+      toDate: leave.to,
+      status,
+      referenceId,
+    });
+
+    await sendLeaveEmail({
+      to: teacher.email,
+      teacherName: teacher.name,
+      status,
+      pdfPath: pdfUrl,
+    });
+
+    // Update leave
+    await db.collection("leaves").updateOne(
+      { _id: new ObjectId(id) },
+      {
+        $set: {
+          status,
+          reviewedBy: auth.userId,
+          reviewedAt: new Date(),
+          pdfUrl,
+        },
+      }
+    );
+
+    // ✅ SAFE ACTIVITY LOGGING (no TS error now)
+    await logActivity({
+      userId: auth.userId,
+      userName: auth.userName || "Principal",
+      role: "principal",
+      action: status === "approved" ? "APPROVED_LEAVE" : "REJECTED_LEAVE",
+      targetId: id,
+      targetType: "leave",
+      message: `${auth.userName || "Principal"} ${status} leave of ${teacher.name}`,
+    });
+
+    return NextResponse.json({
+      message: `Leave ${status} successfully`,
+    });
+
+  } catch (error) {
+    console.error("LEAVE APPROVAL ERROR:", error);
+    return NextResponse.json(
+      { message: "Something went wrong", error: String(error) },
+      { status: 500 }
+    );
+  }
+}
