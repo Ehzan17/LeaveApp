@@ -108,6 +108,18 @@ export default function TeacherLeaves() {
               </a>
             )}
 
+                 {/* PDF Download */}
+            {leave.status === "rejected" && leave.pdfUrl && (
+              <a
+                href={leave.pdfUrl}
+                target="_blank"
+                className="bg-red-600 px-4 py-2 rounded-lg text-sm"
+              >
+                Download PDF
+              </a>
+            )}
+
+
           </div>
         ))}
 

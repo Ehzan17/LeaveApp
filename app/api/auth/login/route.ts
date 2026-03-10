@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import clientPromise from "@/lib/mongodb";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { logActivity } from "@/lib/activityLogger";
 
 export async function POST(req: NextRequest) {
   try {
+
     const body = await req.json();
     const { email, password } = body;
 
@@ -20,6 +22,7 @@ export async function POST(req: NextRequest) {
 
     const user: any = await db.collection("users").findOne({ email });
 
+    // User not found
     if (!user) {
       return NextResponse.json(
         { message: "Invalid credentials" },
@@ -27,7 +30,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 🔴 ensure password exists
+    // 🔴 BLOCK DISABLED USERS
+    if (user.active === false) {
+      return NextResponse.json(
+        { message: "Your account has been disabled by the administrator." },
+        { status: 403 }
+      );
+    }
+
+    // Check password exists
     if (!user.password) {
       return NextResponse.json(
         { message: "User password missing in database" },
@@ -57,6 +68,17 @@ export async function POST(req: NextRequest) {
       { expiresIn: "1d" }
     );
 
+    // Log login activity
+    await logActivity({
+      userId: user._id.toString(),
+      userName: user.name,
+      role: user.role,
+      action: "LOGIN",
+      targetId: user._id.toString(),
+      targetType: "user",
+      message: `${user.name} logged into the system`,
+    });
+
     return NextResponse.json({
       message: "Login successful",
       token,
@@ -65,6 +87,7 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error: any) {
+
     console.error("LOGIN ERROR:", error);
 
     return NextResponse.json(

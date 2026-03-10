@@ -140,12 +140,20 @@ export default function PrincipalDashboard() {
             </tr>
           </thead>
 <tbody>
-  {leaves.map((leave) => (
+  {leaves
+    .filter((leave) => leave.courseType === "aided")
+    .map((leave) => (
     <tr key={leave._id} className="border-b border-gray-800">
       <td className="p-3">{leave.teacherName}</td>
       <td className="p-3">{leave.from}</td>
       <td className="p-3">{leave.to}</td>
-      <td className="p-3">{leave.reason}</td>
+      <td className="p-3">
+  <div className="text-sm">{leave.reason}</div>
+
+  <div className="text-xs text-gray-400 mt-1">
+    {leave.leaveType} • {leave.session}
+  </div>
+</td>
 
       <td className="p-3 space-x-2">
 

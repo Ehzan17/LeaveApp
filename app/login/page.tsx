@@ -33,14 +33,21 @@ export default function LoginPage() {
 
       localStorage.setItem("token", data.token);
       localStorage.setItem("role", data.role);
+if (data.role === "admin") {
+  router.push("/dashboard/admin");
 
-      if (data.role === "admin") {
-        router.push("/dashboard/admin");
-      } else if (data.role === "principal") {
-        router.push("/dashboard/principal");
-      } else {
-        router.push("/dashboard/teacher");
-      }
+} else if (data.role === "principal") {
+  router.push("/dashboard/principal");
+
+} else if (data.role === "sf_coordinator") {
+  router.push("/dashboard/sf-coordinator");
+
+} else if (data.role === "manager") {
+  router.push("/dashboard/manager");
+
+} else {
+  router.push("/dashboard/teacher");
+}
 
     } catch (error) {
       alert("Something went wrong");

@@ -1,17 +1,20 @@
 import nodemailer from "nodemailer";
 import path from "path";
 
+interface SendLeaveEmailParams {
+  to: string;
+  teacherName: string;
+  status: string;
+  pdfPath: string;
+}
+
 export async function sendLeaveEmail({
   to,
   teacherName,
   status,
   pdfPath,
-}: {
-  to: string;
-  teacherName: string;
-  status: "approved" | "rejected";
-  pdfPath: string;
-}) {
+}: SendLeaveEmailParams) {
+
   const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: {

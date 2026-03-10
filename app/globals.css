@@ -37,3 +37,27 @@ body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
 }
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+button {
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+button {
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+button:hover {
+  opacity: 0.9;
+}

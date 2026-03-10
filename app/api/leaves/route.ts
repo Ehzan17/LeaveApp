@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
       process.env.JWT_SECRET as string
     );
 
-    const { from, to, reason } = await req.json();
+    const { from, to, reason, leaveType, session } = await req.json();
 
     if (!from || !to || !reason) {
       return NextResponse.json(
@@ -69,25 +69,59 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    /* Fetch teacher */
+    const teacher = await db.collection("users").findOne({
+      _id: new ObjectId(decoded.userId),
+    });
+
+    const department = teacher?.department || null;
+
+    const courseType =
+      department === "Physics" ||
+      department === "Mathematics" ||
+      department === "Chemistry" ||
+      department === "Economics" ||
+      department === "English" ||
+      department === "Commerce"
+        ? "aided"
+        : "self_financing";
+
     const newLeave = {
-      userId: new ObjectId(decoded.userId), // ✅ FIXED HERE
+      userId: new ObjectId(decoded.userId),
+
+      teacherName: decoded.name,
+      department,
+
+      courseType,
+
       from,
       to,
       reason,
+
+      leaveType,
+      session,
+
+      approvals: {
+        principal: courseType === "aided" ? "pending" : null,
+        sfCoordinator: courseType === "self_financing" ? "pending" : null,
+        manager: courseType === "self_financing" ? "pending" : null,
+      },
+
       status: "pending",
+
       createdAt: new Date(),
     };
 
     await db.collection("leaves").insertOne(newLeave);
-    
+
     await logActivity({
-  userId: decoded.userId,
-  userName: decoded.name,
-  role: decoded.role,
-  action: "APPLIED_LEAVE",
-  targetType: "leave",
-  message: `${decoded.name} applied for leave from ${from} to ${to}`,
-});
+      userId: decoded.userId,
+      userName: decoded.name,
+      role: decoded.role,
+      action: "APPLIED_LEAVE",
+      targetType: "leave",
+      message: `${decoded.name} applied for leave from ${from} to ${to}`,
+    });
 
     return NextResponse.json(
       { message: "Leave submitted successfully" },
@@ -100,5 +134,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-
 }

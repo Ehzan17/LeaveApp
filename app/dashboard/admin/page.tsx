@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 export default function AdminDashboard() {
   const [stats, setStats] = useState<any>(null);
   const [recent, setRecent] = useState<any[]>([]);
+  const [filter, setFilter] = useState("all");
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -20,6 +21,12 @@ export default function AdminDashboard() {
   }, []);
 
   if (!stats) return <div className="text-gray-400">Loading...</div>;
+
+  const filteredActivity = recent.filter((log) => {
+    if (filter === "login") return log.action === "LOGIN";
+    if (filter === "leave") return log.action?.includes("LEAVE");
+    return true;
+  });
 
   return (
     <div className="space-y-10">
@@ -37,13 +44,27 @@ export default function AdminDashboard() {
 
       </div>
 
+      {/* Activity Filter */}
+      <select
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+        className="bg-zinc-900 border border-zinc-700 text-white px-3 py-2 rounded mb-4"
+      >
+        <option value="all">All Activity</option>
+        <option value="login">Login Activity</option>
+        <option value="leave">Leave Activity</option>
+      </select>
+
       {/* Recent Activity */}
       <div className="bg-[#111] border border-gray-800 rounded-2xl p-6">
         <h3 className="text-xl font-semibold mb-4">Recent Activity</h3>
 
         <div className="space-y-3">
-          {recent.map((log, index) => (
-            <div key={index} className="text-sm text-gray-400 border-b border-gray-800 pb-2">
+          {filteredActivity.map((log, index) => (
+            <div
+              key={index}
+              className="text-sm text-gray-400 border-b border-gray-800 pb-2"
+            >
               {log.message}
             </div>
           ))}

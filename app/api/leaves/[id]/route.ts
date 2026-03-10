@@ -8,13 +8,17 @@ import { logActivity } from "@/lib/activityLogger";
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
   const auth = requireRole(req, ["principal"]);
   if (auth instanceof NextResponse) return auth;
 
   try {
+
+    // ✅ Next.js dynamic params fix
+    const params = await context.params;
     const id = params.id;
+
     const { status } = await req.json();
 
     if (!status || !["approved", "rejected"].includes(status)) {
@@ -46,7 +50,7 @@ export async function PATCH(
     }
 
     // Fetch teacher
-    const teacher = await db.collection("users").findOne({
+    const teacher: any = await db.collection("users").findOne({
       _id: leave.userId,
     });
 
@@ -71,6 +75,7 @@ export async function PATCH(
       referenceId,
     });
 
+    // Send email
     await sendLeaveEmail({
       to: teacher.email,
       teacherName: teacher.name,
@@ -78,7 +83,7 @@ export async function PATCH(
       pdfPath: pdfUrl,
     });
 
-    // Update leave
+    // Update leave record
     await db.collection("leaves").updateOne(
       { _id: new ObjectId(id) },
       {
@@ -91,7 +96,7 @@ export async function PATCH(
       }
     );
 
-    // ✅ SAFE ACTIVITY LOGGING (no TS error now)
+    // ✅ Activity log (Teacher name + dates)
     await logActivity({
       userId: auth.userId,
       userName: auth.userName || "Principal",
@@ -99,7 +104,11 @@ export async function PATCH(
       action: status === "approved" ? "APPROVED_LEAVE" : "REJECTED_LEAVE",
       targetId: id,
       targetType: "leave",
-      message: `${auth.userName || "Principal"} ${status} leave of ${teacher.name}`,
+      message: `${teacher.name}'s leave from ${new Date(
+        leave.from
+      ).toLocaleDateString()} to ${new Date(
+        leave.to
+      ).toLocaleDateString()} was ${status}`,
     });
 
     return NextResponse.json({
@@ -108,6 +117,7 @@ export async function PATCH(
 
   } catch (error) {
     console.error("LEAVE APPROVAL ERROR:", error);
+
     return NextResponse.json(
       { message: "Something went wrong", error: String(error) },
       { status: 500 }
