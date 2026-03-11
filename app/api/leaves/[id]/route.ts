@@ -14,7 +14,6 @@ export async function PATCH(
   if (auth instanceof NextResponse) return auth;
 
   try {
-    // ✅ Next.js 16 dynamic params fix
     const { id } = await params;
 
     const { status } = await req.json();
@@ -47,7 +46,6 @@ export async function PATCH(
       );
     }
 
-    // Fetch teacher
     const teacher: any = await db.collection("users").findOne({
       _id: leave.userId,
     });
@@ -59,10 +57,8 @@ export async function PATCH(
       );
     }
 
-    // Generate reference ID
     const referenceId = `REF-${Date.now()}`;
 
-    // Generate PDF
     const pdfUrl = await generateLeaveLetter({
       teacherName: teacher.name,
       teacherEmail: teacher.email,
@@ -73,7 +69,6 @@ export async function PATCH(
       referenceId,
     });
 
-    // Send email
     await sendLeaveEmail({
       to: teacher.email,
       teacherName: teacher.name,
@@ -81,7 +76,6 @@ export async function PATCH(
       pdfPath: pdfUrl,
     });
 
-    // Update leave record
     await db.collection("leaves").updateOne(
       { _id: new ObjectId(id) },
       {
@@ -94,7 +88,6 @@ export async function PATCH(
       }
     );
 
-    // Activity log
     await logActivity({
       userId: auth.userId,
       userName: auth.userName || "Principal",
