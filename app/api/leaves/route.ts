@@ -8,39 +8,46 @@ import { logActivity } from "@/lib/activityLogger";
    GET - Fetch User Leaves
 ========================= */
 export async function GET(req: NextRequest) {
+
   try {
-    const client = await clientPromise;
-    const db = client.db("teacher_leave_portal");
 
     const authHeader = req.headers.get("authorization");
+
     if (!authHeader) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
     const token = authHeader.split(" ")[1];
+
     const decoded: any = jwt.verify(
       token,
       process.env.JWT_SECRET as string
     );
 
-    const userObjectId = new ObjectId(decoded.userId);
+    const client = await clientPromise;
+    const db = client.db("teacher_leave_portal");
 
     const leaves = await db
       .collection("leaves")
-      .find({ userId: userObjectId })
+      .find({
+        userId: new ObjectId(decoded.userId),
+      })
       .sort({ createdAt: -1 })
       .toArray();
 
     return NextResponse.json(leaves);
+
   } catch (error) {
-    console.error("GET Leaves Error:", error);
+
+    console.error("GET LEAVES ERROR:", error);
+
     return NextResponse.json(
-      { message: "Something went wrong" },
+      { message: "Server error" },
       { status: 500 }
     );
+
   }
 }
-
 /* =========================
    POST - Create Leave
 ========================= */

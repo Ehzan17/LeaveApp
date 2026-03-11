@@ -12,7 +12,8 @@ interface LeaveLetterData {
   referenceId: string;
 }
 
-export async function generateLeaveLetter(data: LeaveLetterData) {
+export async function generateLeaveLetter(data: LeaveLetterData): Promise<string> {
+
   const lettersDir = path.join(process.cwd(), "public", "letters");
 
   if (!fs.existsSync(lettersDir)) {
@@ -28,6 +29,7 @@ export async function generateLeaveLetter(data: LeaveLetterData) {
   });
 
   const stream = fs.createWriteStream(filePath);
+
   doc.pipe(stream);
 
   doc.fontSize(20).text("ST. PAULS COLLEGE", { align: "center" });
@@ -63,6 +65,12 @@ export async function generateLeaveLetter(data: LeaveLetterData) {
   doc.text("St. Pauls College");
 
   doc.end();
+
+  /* WAIT for file to finish writing */
+
+  await new Promise<void>((resolve) => {
+    stream.on("finish", () => resolve());
+  });
 
   return `/letters/${fileName}`;
 }

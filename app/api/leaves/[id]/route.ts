@@ -8,16 +8,14 @@ import { logActivity } from "@/lib/activityLogger";
 
 export async function PATCH(
   req: NextRequest,
-  context: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const auth = requireRole(req, ["principal"]);
   if (auth instanceof NextResponse) return auth;
 
   try {
-
-    // ✅ Next.js dynamic params fix
-    const params = await context.params;
-    const id = params.id;
+    // ✅ Next.js 16 dynamic params fix
+    const { id } = await params;
 
     const { status } = await req.json();
 
@@ -96,7 +94,7 @@ export async function PATCH(
       }
     );
 
-    // ✅ Activity log (Teacher name + dates)
+    // Activity log
     await logActivity({
       userId: auth.userId,
       userName: auth.userName || "Principal",
@@ -114,7 +112,6 @@ export async function PATCH(
     return NextResponse.json({
       message: `Leave ${status} successfully`,
     });
-
   } catch (error) {
     console.error("LEAVE APPROVAL ERROR:", error);
 
