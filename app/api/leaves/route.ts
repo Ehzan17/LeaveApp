@@ -1,143 +1,117 @@
 import { NextRequest, NextResponse } from "next/server";
 import clientPromise from "@/lib/mongodb";
-import jwt from "jsonwebtoken";
+import { requireRole } from "@/lib/roleGuard";
 import { ObjectId } from "mongodb";
+import { generateLeaveLetter } from "@/lib/pdfGenerator";
+import { sendLeaveEmail } from "@/lib/emailSender";
 import { logActivity } from "@/lib/activityLogger";
 
-/* =========================
-   GET - Fetch User Leaves
-========================= */
-export async function GET(req: NextRequest) {
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const auth = requireRole(req, ["principal"]);
+  if (auth instanceof NextResponse) return auth;
 
   try {
+    // ✅ Next.js 16 dynamic params
+    const { id } = await params;
 
-    const authHeader = req.headers.get("authorization");
+    const { status } = await req.json();
 
-    if (!authHeader) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    }
-
-    const token = authHeader.split(" ")[1];
-
-    const decoded: any = jwt.verify(
-      token,
-      process.env.JWT_SECRET as string
-    );
-
-    const client = await clientPromise;
-    const db = client.db("teacher_leave_portal");
-
-    const leaves = await db
-      .collection("leaves")
-      .find({
-        userId: new ObjectId(decoded.userId),
-      })
-      .sort({ createdAt: -1 })
-      .toArray();
-
-    return NextResponse.json(leaves);
-
-  } catch (error) {
-
-    console.error("GET LEAVES ERROR:", error);
-
-    return NextResponse.json(
-      { message: "Server error" },
-      { status: 500 }
-    );
-
-  }
-}
-/* =========================
-   POST - Create Leave
-========================= */
-export async function POST(req: NextRequest) {
-  try {
-    const client = await clientPromise;
-    const db = client.db("teacher_leave_portal");
-
-    const authHeader = req.headers.get("authorization");
-    if (!authHeader) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    }
-
-    const token = authHeader.split(" ")[1];
-    const decoded: any = jwt.verify(
-      token,
-      process.env.JWT_SECRET as string
-    );
-
-    const { from, to, reason, leaveType, session } = await req.json();
-
-    if (!from || !to || !reason) {
+    if (!status || !["approved", "rejected"].includes(status)) {
       return NextResponse.json(
-        { message: "All fields are required" },
+        { message: "Status must be approved or rejected" },
         { status: 400 }
       );
     }
 
-    /* Fetch teacher */
-    const teacher = await db.collection("users").findOne({
-      _id: new ObjectId(decoded.userId),
+    const client = await clientPromise;
+    const db = client.db("teacher_leave_portal");
+
+    const leave = await db.collection("leaves").findOne({
+      _id: new ObjectId(id),
     });
 
-    const department = teacher?.department || null;
+    if (!leave) {
+      return NextResponse.json(
+        { message: "Leave request not found" },
+        { status: 404 }
+      );
+    }
 
-    const courseType =
-      department === "Physics" ||
-      department === "Mathematics" ||
-      department === "Chemistry" ||
-      department === "Economics" ||
-      department === "English" ||
-      department === "Commerce"
-        ? "aided"
-        : "self_financing";
+    if (leave.status !== "pending") {
+      return NextResponse.json(
+        { message: "Leave already reviewed" },
+        { status: 400 }
+      );
+    }
 
-    const newLeave = {
-      userId: new ObjectId(decoded.userId),
+    const teacher: any = await db.collection("users").findOne({
+      _id: leave.userId,
+    });
 
-      teacherName: decoded.name,
-      department,
+    if (!teacher) {
+      return NextResponse.json(
+        { message: "Teacher not found" },
+        { status: 404 }
+      );
+    }
 
-      courseType,
+    const referenceId = `REF-${Date.now()}`;
 
-      from,
-      to,
-      reason,
+    const pdfUrl = await generateLeaveLetter({
+      teacherName: teacher.name,
+      teacherEmail: teacher.email,
+      department: teacher.department,
+      fromDate: leave.from,
+      toDate: leave.to,
+      status,
+      referenceId,
+    });
 
-      leaveType,
-      session,
+    await sendLeaveEmail({
+      to: teacher.email,
+      teacherName: teacher.name,
+      status,
+      pdfPath: pdfUrl,
+    });
 
-      approvals: {
-        principal: courseType === "aided" ? "pending" : null,
-        sfCoordinator: courseType === "self_financing" ? "pending" : null,
-        manager: courseType === "self_financing" ? "pending" : null,
-      },
-
-      status: "pending",
-
-      createdAt: new Date(),
-    };
-
-    await db.collection("leaves").insertOne(newLeave);
+    await db.collection("leaves").updateOne(
+      { _id: new ObjectId(id) },
+      {
+        $set: {
+          status,
+          reviewedBy: auth.userId,
+          reviewedAt: new Date(),
+          pdfUrl,
+        },
+      }
+    );
 
     await logActivity({
-      userId: decoded.userId,
-      userName: decoded.name,
-      role: decoded.role,
-      action: "APPLIED_LEAVE",
+      userId: auth.userId,
+      userName: auth.userName || "Principal",
+      role: "principal",
+      action: status === "approved" ? "APPROVED_LEAVE" : "REJECTED_LEAVE",
+      targetId: id,
       targetType: "leave",
-      message: `${decoded.name} applied for leave from ${from} to ${to}`,
+      message: `${teacher.name}'s leave from ${new Date(
+        leave.from
+      ).toLocaleDateString()} to ${new Date(
+        leave.to
+      ).toLocaleDateString()} was ${status}`,
     });
 
-    return NextResponse.json(
-      { message: "Leave submitted successfully" },
-      { status: 201 }
-    );
+    return NextResponse.json({
+      message: `Leave ${status} successfully`,
+    });
+
   } catch (error) {
-    console.error("POST Leave Error:", error);
+    console.error("LEAVE APPROVAL ERROR:", error);
+
     return NextResponse.json(
-      { message: "Something went wrong" },
+      { message: "Something went wrong", error: String(error) },
       { status: 500 }
     );
   }
