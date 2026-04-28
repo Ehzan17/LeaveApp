@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ProfilePhotoUploader from "@/components/ProfilePhotoUploader";
+import toast from "react-hot-toast";
 
 export default function PrincipalDashboard() {
   const [user, setUser] = useState<any>(null);
@@ -10,7 +11,7 @@ export default function PrincipalDashboard() {
 
   const fetchData = async () => {
     try {
-      const token = localStorage.getItem("token");
+      const token = sessionStorage.getItem("token");
 
       if (!token) return;
 
@@ -57,7 +58,7 @@ export default function PrincipalDashboard() {
   }, []);
 
   const updateStatus = async (id: string, status: string) => {
-  const token = localStorage.getItem("token");
+  const token = sessionStorage.getItem("token");
 
   const res = await fetch(`/api/leaves/${id}`, {
     method: "PATCH",
@@ -69,7 +70,8 @@ export default function PrincipalDashboard() {
   });
 
   if (!res.ok) {
-    alert("Failed to update leave");
+    const data = await res.json().catch(() => null);
+    toast.error(data?.message || "Failed to update leave");
     return;
   }
 
@@ -128,70 +130,115 @@ export default function PrincipalDashboard() {
       {/* Leave Requests */}
       <div className="bg-[#111] border border-gray-800 rounded-2xl p-6 shadow-xl">
         <h2 className="text-xl font-semibold mb-6">Leave Requests</h2>
-
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-700 text-gray-400">
-              <th className="p-3 text-left">Teacher</th>
-              <th className="p-3 text-left">From</th>
-              <th className="p-3 text-left">To</th>
-              <th className="p-3 text-left">Reason</th>
-              <th className="p-3 text-left">Action</th>
-            </tr>
-          </thead>
-<tbody>
-  {leaves
-    .filter((leave) => leave.courseType === "aided")
-    .map((leave) => (
-    <tr key={leave._id} className="border-b border-gray-800">
-      <td className="p-3">{leave.teacherName}</td>
-      <td className="p-3">{leave.from}</td>
-      <td className="p-3">{leave.to}</td>
-      <td className="p-3">
-  <div className="text-sm">{leave.reason}</div>
-
-  <div className="text-xs text-gray-400 mt-1">
-    {leave.leaveType} • {leave.session}
-  </div>
-</td>
-
-      <td className="p-3 space-x-2">
-
-        <span
-          className={`px-3 py-1 rounded-full text-xs ${
-            leave.status === "approved"
-              ? "bg-green-600/20 text-green-400"
-              : leave.status === "rejected"
-              ? "bg-red-600/20 text-red-400"
-              : "bg-yellow-600/20 text-yellow-400"
-          }`}
-        >
-          {leave.status}
-        </span>
-
-        {leave.status === "pending" && (
-          <>
-            <button
-              onClick={() => updateStatus(leave._id, "approved")}
-              className="bg-green-600 px-3 py-1 rounded text-xs"
-            >
-              Approve
-            </button>
-
-            <button
-              onClick={() => updateStatus(leave._id, "rejected")}
-              className="bg-red-600 px-3 py-1 rounded text-xs"
-            >
-              Reject
-            </button>
-          </>
-        )}
-      </td>
+<div className="w-full overflow-x-auto">
+  <table className="w-full text-sm min-w-[800px]">
+  <thead>
+    <tr className="border-b border-gray-700 text-gray-400">
+      <th className="p-3 text-left">Name</th>
+      <th className="p-3 text-left">From</th>
+      <th className="p-3 text-left">To</th>
+      <th className="p-3 text-left">Type</th>
+      <th className="p-3 text-left">Days</th>
+      <th className="p-3 text-left">Balance</th>
+      <th className="p-3 text-left">Reason</th>
+      <th className="p-3 text-left">Status</th>
     </tr>
-  ))}
-</tbody>
-        </table>
+  </thead>
 
+  <tbody>
+    {leaves
+      .filter((leave) => leave.courseType === "aided")
+      .map((leave) => (
+        <tr
+          key={leave._id}
+          className="border-b border-gray-800 hover:bg-[#1a1a1a]"
+        >
+          {/* Name */}
+          <td className="p-3 font-medium">
+            {leave.teacherName}
+          </td>
+
+          {/* From */}
+          <td className="p-3">
+            {new Date(leave.from).toLocaleDateString("en-GB", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+            })}
+          </td>
+
+          {/* To */}
+          <td className="p-3">
+            {new Date(leave.to).toLocaleDateString("en-GB", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+            })}
+          </td>
+
+          {/* Type */}
+          <td className="p-3 text-blue-400 font-medium">
+            {leave.leaveType}
+          </td>
+
+          {/* Days */}
+          <td className="p-3">
+            {leave.days}
+          </td>
+
+          {/* Balance */}
+          <td className="p-3 text-yellow-400">
+            {leave.leaveBalance?.[leave.leaveType] ?? "—"}
+          </td>
+
+          {/* Reason */}
+          <td className="p-3">
+            <div>{leave.reason}</div>
+            <div className="text-xs text-gray-400 mt-1">
+              {leave.session}
+            </div>
+          </td>
+
+          {/* Status + Actions */}
+          <td className="p-3 space-x-2">
+
+            <span
+              className={`px-3 py-1 rounded-full text-xs ${
+                leave.status === "approved"
+                  ? "bg-green-600/20 text-green-400"
+                  : leave.status === "rejected"
+                  ? "bg-red-600/20 text-red-400"
+                  : "bg-yellow-600/20 text-yellow-400"
+              }`}
+            >
+              {leave.status}
+            </span>
+
+            {leave.status === "pending" && (
+              <>
+                <button
+                  onClick={() => updateStatus(leave._id, "approved")}
+                  className="bg-green-600 px-3 py-1 rounded text-xs hover:bg-green-500"
+                >
+                  Approve
+                </button>
+
+                <button
+                  onClick={() => updateStatus(leave._id, "rejected")}
+                  className="bg-red-600 px-3 py-1 rounded text-xs hover:bg-red-500"
+                >
+                  Reject
+                </button>
+              </>
+            )}
+
+          </td>
+        </tr>
+      ))}
+  </tbody>
+</table>
+
+</div>
       </div>
     </div>
   );

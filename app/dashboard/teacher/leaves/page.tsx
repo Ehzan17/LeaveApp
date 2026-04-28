@@ -9,22 +9,31 @@ export default function TeacherLeaves() {
   const [loading, setLoading] = useState(true);
 
   const fetchLeaves = async () => {
-    const token = localStorage.getItem("token");
+    try {
+      const token = sessionStorage.getItem("token");
 
-    const res = await fetch("/api/leaves", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+      const res = await fetch("/api/leaves", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-    const data = await res.json();
-    setLeaves(data);
-    setLoading(false);
+      const data = await res.json();
+
+      // ✅ FIX: ensure array
+      setLeaves(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Fetch error:", err);
+      setLeaves([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     fetchLeaves();
   }, []);
 
-  const filteredLeaves = leaves
+  // ✅ SAFE FILTER + SORT
+  const filteredLeaves = (Array.isArray(leaves) ? leaves : [])
     .filter((leave) =>
       statusFilter === "all" ? true : leave.status === statusFilter
     )
@@ -72,55 +81,59 @@ export default function TeacherLeaves() {
       <div className="grid gap-6">
 
         {filteredLeaves.map((leave) => (
+
           <div
             key={leave._id}
-            className="bg-[#111] border border-gray-800 rounded-2xl p-6 flex justify-between items-center"
+            className="bg-[#111] border border-gray-800 rounded-2xl p-6 flex justify-between items-center hover:bg-[#1a1a1a] transition"
           >
 
             <div>
+
+              {/* ✅ FIXED DATE FORMAT */}
               <p className="text-sm text-gray-400">
-                {leave.from} → {leave.to}
+                {new Date(leave.from).toLocaleDateString("en-IN", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                })}{" "}
+                →{" "}
+                {new Date(leave.to).toLocaleDateString("en-IN", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                })}
               </p>
 
               <p className="mt-2">{leave.reason}</p>
 
+              {/* ✅ CLEAN STATUS BADGE */}
               <span
-                className={`mt-3 inline-block px-3 py-1 rounded-full text-xs ${
+                className={`mt-3 inline-block px-3 py-1 rounded-full text-xs font-medium ${
                   leave.status === "approved"
-                    ? "bg-green-600/20 text-green-400"
+                    ? "bg-green-500/20 text-green-400"
                     : leave.status === "rejected"
-                    ? "bg-red-600/20 text-red-400"
-                    : "bg-yellow-600/20 text-yellow-400"
+                    ? "bg-red-500/20 text-red-400"
+                    : "bg-yellow-500/20 text-yellow-400"
                 }`}
               >
-                {leave.status}
+                {leave.status.toUpperCase()}
               </span>
+
             </div>
 
-            {/* PDF Download */}
-            {leave.status === "approved" && leave.pdfUrl && (
+            {/* ✅ PDF DOWNLOAD (both approved + rejected) */}
+            {leave.pdfUrl && (
               <a
                 href={leave.pdfUrl}
                 target="_blank"
-                className="bg-red-600 px-4 py-2 rounded-lg text-sm"
+                className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-sm transition"
               >
                 Download PDF
               </a>
             )}
-
-                 {/* PDF Download */}
-            {leave.status === "rejected" && leave.pdfUrl && (
-              <a
-                href={leave.pdfUrl}
-                target="_blank"
-                className="bg-red-600 px-4 py-2 rounded-lg text-sm"
-              >
-                Download PDF
-              </a>
-            )}
-
 
           </div>
+
         ))}
 
       </div>

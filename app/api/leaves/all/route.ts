@@ -60,10 +60,16 @@ export async function GET(req: NextRequest) {
             approvals: 1,
             status: 1,
             department: 1,
+
+            // ✅ existing
             teacherName: "$teacher.name",
             teacherEmail: "$teacher.email",
             teacherDepartment: "$teacher.department",
-            teacherPhoto: "$teacher.photo"
+            teacherPhoto: "$teacher.photo",
+
+            // 🔥 NEW (what you needed)
+            days: 1,
+            leaveBalance: "$teacher.leaveBalance"
           }
         }
       ])
@@ -76,7 +82,7 @@ export async function GET(req: NextRequest) {
     console.error("ALL LEAVES ERROR:", error);
 
     return NextResponse.json(
-      { message: "Something went wrong" },
+      { message: "Unable to load leave requests. Please try again." },
       { status: 500 }
     );
   }

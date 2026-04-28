@@ -1,21 +1,26 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #050506;
+  --foreground: #f8fafc;
+  --panel: rgba(17, 24, 39, 0.68);
+  --panel-strong: rgba(12, 16, 26, 0.86);
+  --line: rgba(148, 163, 184, 0.18);
+  --muted: #94a3b8;
+  --accent: #b91c1c;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: Arial, Helvetica, sans-serif;
+  --font-mono: "Courier New", Consolas, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #050506;
+    --foreground: #f8fafc;
   }
 }
 
@@ -24,21 +29,13 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
-:root {
-  --bg-primary: #0f172a;        /* Deep navy */
-  --bg-secondary: #1e293b;      /* Card background */
-  --accent: #b91c1c;            /* College red */
-  --text-primary: #f8fafc;      /* Soft white */
-  --text-secondary: #94a3b8;    /* Muted gray */
-  --border-color: #334155;
-}
-
 body {
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
+  background-color: var(--background);
+  color: var(--foreground);
 }
 button {
   cursor: pointer;
+  min-height: 44px;
 }
 
 button:disabled {
@@ -60,4 +57,105 @@ button {
 
 button:hover {
   opacity: 0.9;
+}
+
+.dashboard-content {
+  color: #f8fafc;
+}
+
+.dashboard-content h1,
+.dashboard-content h2,
+.dashboard-content h3 {
+  letter-spacing: 0;
+}
+
+.dashboard-content > div {
+  max-width: 100%;
+}
+
+.dashboard-content .bg-\[\#111\],
+.dashboard-content .bg-\[\#111\]\/80,
+.dashboard-content .bg-\[\#111\]\/60,
+.dashboard-content .bg-\[\#111827\]\/80 {
+  background: linear-gradient(145deg, rgba(17, 24, 39, 0.72), rgba(8, 12, 20, 0.86)) !important;
+  border-color: var(--line) !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(18px);
+}
+
+.dashboard-content .rounded-xl,
+.dashboard-content .rounded-2xl {
+  border-radius: 1.25rem;
+}
+
+.dashboard-content table {
+  border-collapse: collapse;
+}
+
+.dashboard-content thead tr {
+  border-color: rgba(148, 163, 184, 0.24) !important;
+}
+
+.dashboard-content tbody tr {
+  border-color: rgba(148, 163, 184, 0.14) !important;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.dashboard-content tbody tr:hover {
+  background: rgba(255, 255, 255, 0.045) !important;
+}
+
+.dashboard-content th,
+.dashboard-content td {
+  vertical-align: middle;
+}
+
+.dashboard-content input,
+.dashboard-content select,
+.dashboard-content textarea {
+  min-height: 44px;
+}
+
+.dashboard-content button {
+  min-height: 44px;
+}
+
+@media (max-width: 640px) {
+  .dashboard-content {
+    padding: 1rem;
+  }
+
+  .dashboard-content .grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .dashboard-content table {
+    white-space: nowrap;
+  }
+
+  .dashboard-content .overflow-x-auto {
+    margin-inline: -0.5rem;
+    padding-inline: 0.5rem;
+    scrollbar-width: thin;
+  }
+
+  .dashboard-content .overflow-x-auto table {
+    min-width: 720px;
+  }
+
+  .dashboard-content .flex.items-center.gap-6 {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .dashboard-content .p-6 {
+    padding: 1rem;
+  }
+}
+.react-datepicker-popper {
+  z-index: 9999 !important;
+}
+nextjs-portal,
+#nextjs__container {
+  display: none !important;
 }

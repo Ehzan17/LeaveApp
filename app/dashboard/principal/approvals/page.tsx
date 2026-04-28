@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 
 export default function PrincipalApprovals() {
   const [leaves, setLeaves] = useState<any[]>([]);
@@ -11,23 +12,30 @@ export default function PrincipalApprovals() {
   const fetchLeaves = async () => {
     const token = localStorage.getItem("token");
 
-    const res = await fetch("/api/leaves/all", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    try {
+      const res = await fetch("/api/leaves/all", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-    const data = await res.json();
-    setLeaves(data);
-    setLoading(false);
+      const data = await res.json();
+      setLeaves(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error(err);
+      setLeaves([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     fetchLeaves();
   }, []);
 
+  // ✅ FIXED (NO LAG)
   const updateStatus = async (id: string, status: string) => {
     const token = localStorage.getItem("token");
 
-    await fetch(`/api/leaves/${id}`, {
+    const res = await fetch(`/api/leaves/${id}`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
@@ -36,12 +44,13 @@ export default function PrincipalApprovals() {
       body: JSON.stringify({ status }),
     });
 
-    // Update instantly in UI
-    setLeaves((prev) =>
-      prev.map((l) =>
-        l._id === id ? { ...l, status } : l
-      )
-    );
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      toast.error(data?.message || "Failed to update status");
+      return;
+    }
+
+    await fetchLeaves(); // 🔥 REFRESH INSTEAD OF LOCAL UPDATE
   };
 
   const filteredLeaves = leaves.filter((leave) => {
@@ -118,9 +127,7 @@ export default function PrincipalApprovals() {
               />
 
               <div>
-                <p className="font-semibold">
-                  {leave.teacherName}
-                </p>
+                <p className="font-semibold">{leave.teacherName}</p>
                 <p className="text-sm text-gray-400">
                   {leave.teacherDepartment}
                 </p>
@@ -131,6 +138,7 @@ export default function PrincipalApprovals() {
                   {leave.reason}
                 </p>
               </div>
+
             </div>
 
             {/* Right */}
@@ -156,6 +164,7 @@ export default function PrincipalApprovals() {
                   >
                     Approve
                   </button>
+
                   <button
                     onClick={() => updateStatus(leave._id, "rejected")}
                     className="bg-red-600 px-4 py-2 rounded-lg"
@@ -166,10 +175,12 @@ export default function PrincipalApprovals() {
               )}
 
             </div>
+
           </div>
         ))}
 
       </div>
+
     </div>
   );
 }

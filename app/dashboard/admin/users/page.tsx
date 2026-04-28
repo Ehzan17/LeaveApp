@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 
 const departments = [
   "Physics",
@@ -17,6 +18,8 @@ const departments = [
   "Broadcasting and Journalism"
 ];
 
+const leaveTypes = ["CL", "VL", "OD", "DL", "CML"];
+
 export default function AdminUsersPage() {
 const [showAcademic, setShowAcademic] = useState(true);
 const [showAided, setShowAided] = useState(true);
@@ -26,6 +29,7 @@ const [showAdminStaff, setShowAdminStaff] = useState(false);
   const [users, setUsers] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [newPassword, setNewPassword] = useState("");
 
   const [showCreate, setShowCreate] = useState(false);
 
@@ -37,10 +41,7 @@ const [showAdminStaff, setShowAdminStaff] = useState(false);
     department: departments[0]
   });
 
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("token")
-      : null;
+    const getToken = () => sessionStorage.getItem("token");
 
 const loadUsers = async () => {
 
@@ -55,7 +56,7 @@ const loadUsers = async () => {
   }
 
   const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` }
+    headers: { Authorization: `Bearer ${getToken()}` }
   });
 
   const data = await res.json();
@@ -71,10 +72,36 @@ const loadUsers = async () => {
     u.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  return (
-    <div className="flex h-full">
+  const updateSelectedUser = async () => {
+    if (!selectedUser) return;
 
-      <div className="w-64 border-r border-gray-800 bg-[#0b0f19] p-4 text-sm">
+    const res = await fetch("/api/admin/users", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getToken()}`,
+      },
+      body: JSON.stringify({
+        userId: selectedUser._id,
+        updates: selectedUser,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      toast.error(data.message || "Unable to update user");
+      return;
+    }
+
+    toast.success(data.message || "User updated");
+    loadUsers();
+  };
+
+  return (
+    <div className="flex flex-col md:flex-row h-full">
+
+      <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-gray-800 bg-[#0b0f19] p-4 text-sm overflow-x-auto">
 
   {/* Academic Departments */}
 
@@ -201,7 +228,7 @@ const loadUsers = async () => {
   )}
 
 </div>
-      <div className="flex-1 p-8 space-y-6">
+      <div className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6">
 
         <h2 className="text-2xl font-bold">
           {dept} Department
@@ -214,7 +241,7 @@ const loadUsers = async () => {
           className="w-full bg-[#111] border border-gray-800 p-3 rounded"
         />
 
-        <div className="grid grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
 
           {filtered.map((user) => (
             <div
@@ -254,7 +281,7 @@ const loadUsers = async () => {
       </div>
 
       {selectedUser && (
-        <div className="fixed right-0 top-0 h-full w-96 bg-[#111] border-l border-gray-800 p-6 space-y-4 overflow-y-auto">
+        <div className="fixed right-0 top-0 h-full w-full sm:w-96 bg-[#111] border-l border-gray-800 p-6 space-y-4 overflow-y-auto">
 
           <button
             onClick={() => setSelectedUser(null)}
@@ -275,6 +302,76 @@ const loadUsers = async () => {
           <p className="text-gray-400">
             {selectedUser.email}
           </p>
+
+          <div className="space-y-3 rounded-2xl border border-gray-800 bg-black/20 p-4">
+            <h4 className="font-semibold">Edit Details</h4>
+            {[
+              ["name", "Name"],
+              ["email", "Email"],
+              ["phone", "Phone"],
+              ["designation", "Designation"],
+              ["qualification", "Qualification"],
+              ["experience", "Experience"],
+              ["address", "Address"],
+            ].map(([field, label]) => (
+              <label key={field} className="block">
+                <span className="text-xs text-gray-400">{label}</span>
+                <input
+                  value={selectedUser[field] || ""}
+                  onChange={(e) =>
+                    setSelectedUser({
+                      ...selectedUser,
+                      [field]: e.target.value,
+                    })
+                  }
+                  className="mt-1 w-full rounded-xl border border-gray-800 bg-black/40 p-3"
+                />
+              </label>
+            ))}
+
+            <label className="block">
+              <span className="text-xs text-gray-400">Bio</span>
+              <textarea
+                value={selectedUser.bio || ""}
+                onChange={(e) =>
+                  setSelectedUser({ ...selectedUser, bio: e.target.value })
+                }
+                className="mt-1 w-full rounded-xl border border-gray-800 bg-black/40 p-3"
+              />
+            </label>
+
+            <div>
+              <p className="mb-2 text-xs text-gray-400">Leave Balance</p>
+              <div className="grid grid-cols-2 gap-2">
+                {leaveTypes.map((type) => (
+                  <label key={type} className="block">
+                    <span className="text-xs text-gray-500">{type}</span>
+                    <input
+                      type="number"
+                      value={selectedUser.leaveBalance?.[type] ?? 0}
+                      onChange={(e) =>
+                        setSelectedUser({
+                          ...selectedUser,
+                          leaveBalance: {
+                            ...(selectedUser.leaveBalance || {}),
+                            [type]: Number(e.target.value),
+                          },
+                        })
+                      }
+                      className="mt-1 w-full rounded-xl border border-gray-800 bg-black/40 p-3"
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={updateSelectedUser}
+              className="w-full rounded-xl bg-green-600 p-3 hover:bg-green-500"
+            >
+              Save User Changes
+            </button>
+          </div>
 
           <p>
             <b>Phone:</b>{" "}
@@ -298,13 +395,14 @@ const loadUsers = async () => {
             </p>
 
             <select
-              defaultValue={selectedUser.role}
+              value={selectedUser.role}
               onChange={async (e) => {
+                setSelectedUser({ ...selectedUser, role: e.target.value });
                 await fetch("/api/admin/users/change-role", {
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`
+                    Authorization: `Bearer ${getToken()}`
                   },
                   body: JSON.stringify({
                     userId: selectedUser._id,
@@ -327,30 +425,39 @@ const loadUsers = async () => {
 
           <button
             onClick={async () => {
-
-              const newPass = prompt("Enter new password");
-
-              if (!newPass) return;
+              if (!newPassword) {
+                toast.error("Enter a new password");
+                return;
+              }
 
               await fetch("/api/admin/users/reset-password", {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
-                  Authorization: `Bearer ${token}`
+                  Authorization: `Bearer ${getToken()}`
                 },
                 body: JSON.stringify({
                   userId: selectedUser._id,
-                  newPassword: newPass
+                  newPassword
                 })
               });
 
-              alert("Password reset successful");
+              toast.success("Password reset successfully");
+              setNewPassword("");
 
             }}
             className="w-full bg-purple-600 p-2 rounded"
           >
             Reset Password
           </button>
+
+          <input
+            type="password"
+            placeholder="New password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            className="w-full rounded-xl border border-gray-800 bg-black/40 p-3"
+          />
 
 <button
   onClick={async () => {
@@ -359,7 +466,7 @@ const loadUsers = async () => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`
+        Authorization: `Bearer ${getToken()}`
       },
       body: JSON.stringify({
         userId: selectedUser._id
@@ -390,7 +497,7 @@ const loadUsers = async () => {
 {showCreate && (
   <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
 
-    <div className="bg-[#111] border border-gray-800 p-8 rounded-xl w-[420px] space-y-4">
+    <div className="bg-[#111] border border-gray-800 p-6 sm:p-8 rounded-xl w-[90%] sm:w-[420px] space-y-4">
 
       <h3 className="text-xl font-bold">Create New User</h3>
 
@@ -470,14 +577,19 @@ const loadUsers = async () => {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`
+                Authorization: `Bearer ${getToken()}`
               },
               body: JSON.stringify(newUser)
             });
 
             const data = await res.json();
 
-            alert(data.message);
+            if (!res.ok) {
+              toast.error(data.message || "Unable to create user");
+              return;
+            }
+
+            toast.success(data.message || "User created");
 
             if (res.ok) {
 

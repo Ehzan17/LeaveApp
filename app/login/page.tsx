@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
+import toast from "react-hot-toast";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -19,71 +20,71 @@ export default function LoginPage() {
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ email, password }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        alert(data.message || "Login failed");
+        toast.error(data.message || "Login failed ❌");
         setLoading(false);
         return;
       }
 
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("role", data.role);
-if (data.role === "admin") {
-  router.push("/dashboard/admin");
+      sessionStorage.setItem("token", data.token);
 
-} else if (data.role === "principal") {
-  router.push("/dashboard/principal");
+      const decoded = JSON.parse(atob(data.token.split(".")[1]));
+      const role = decoded.role;
 
-} else if (data.role === "sf_coordinator") {
-  router.push("/dashboard/sf-coordinator");
-
-} else if (data.role === "manager") {
-  router.push("/dashboard/manager");
-
-} else {
-  router.push("/dashboard/teacher");
-}
+      if (role === "admin") {
+        router.push("/dashboard/admin");
+      } else if (role === "principal") {
+        router.push("/dashboard/principal");
+      } else if (role === "sf_coordinator") {
+        router.push("/dashboard/sf-coordinator");
+      } else if (role === "manager") {
+        router.push("/dashboard/manager");
+      } else {
+        router.push("/dashboard/teacher");
+      }
 
     } catch (error) {
-      alert("Something went wrong");
+      console.error("LOGIN ERROR:", error);
+      toast.error("Something went wrong ⚠️");
     }
 
     setLoading(false);
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0b0f19] text-white relative overflow-hidden">
-
-      {/* Background Glow */}
-      <div className="absolute w-[500px] h-[500px] bg-red-600/20 rounded-full blur-3xl -top-40 -left-40"></div>
-      <div className="absolute w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-3xl bottom-0 right-0"></div>
+    <div className="min-h-screen bg-gradient-to-br from-black via-[#0d0d0d] to-gray-900 flex items-center justify-center px-4">
 
       {/* Card */}
-      <div className="relative z-10 w-full max-w-md bg-[#111827]/80 backdrop-blur-xl border border-gray-800 p-10 rounded-2xl shadow-2xl">
+      <div className="w-full max-w-md bg-[#111]/80 backdrop-blur-md border border-gray-800 p-6 sm:p-8 rounded-2xl shadow-xl">
 
-        <h1 className="text-3xl font-bold text-center mb-2">
-          Staff Portal
-        </h1>
+        {/* Logo */}
+        <div className="flex flex-col items-center mb-6">
+          <img src="/stpaulslogo.png" className="w-16 mb-3" />
+          <h1 className="text-2xl font-semibold">Staff Portal</h1>
+          <p className="text-gray-400 text-sm mt-1 text-center">
+            Secure Role-Based Access System
+          </p>
+        </div>
 
-        <p className="text-gray-400 text-center mb-8 text-sm">
-          Secure Role-Based Access System
-        </p>
-
-        <form onSubmit={handleLogin} className="space-y-6">
+        {/* FORM */}
+        <form onSubmit={handleLogin} className="space-y-5">
 
           {/* Email */}
           <div>
-            <label className="text-sm text-gray-400">Email</label>
+            <label className="text-xs text-gray-400">Email</label>
             <input
               type="email"
               required
               placeholder="Enter your email"
-              className="w-full mt-2 px-4 py-3 bg-[#0b0f19] border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-600 transition"
+              className="w-full mt-2 px-4 py-3 bg-[#0d0d0d] border border-gray-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500 transition"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
@@ -91,14 +92,14 @@ if (data.role === "admin") {
 
           {/* Password */}
           <div>
-            <label className="text-sm text-gray-400">Password</label>
+            <label className="text-xs text-gray-400">Password</label>
 
             <div className="relative mt-2">
               <input
                 type={showPassword ? "text" : "password"}
                 required
                 placeholder="Enter your password"
-                className="w-full px-4 py-3 bg-[#0b0f19] border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-600 transition pr-12"
+                className="w-full px-4 py-3 bg-[#0d0d0d] border border-gray-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500 transition pr-12"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
@@ -108,7 +109,7 @@ if (data.role === "admin") {
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
               >
-                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
           </div>
@@ -117,7 +118,7 @@ if (data.role === "admin") {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-red-700 hover:bg-red-800 rounded-lg font-medium transition-all duration-200 disabled:opacity-50"
+            className="w-full py-3 bg-red-600 hover:bg-red-700 rounded-xl font-medium transition disabled:opacity-50"
           >
             {loading ? "Signing in..." : "Login"}
           </button>
@@ -125,8 +126,8 @@ if (data.role === "admin") {
         </form>
 
         {/* Footer */}
-        <p className="text-center text-xs text-gray-500 mt-8">
-          © 2026 St. Paul’s College — Enterprise Leave Management System
+        <p className="text-center text-xs text-gray-500 mt-6">
+          © 2026 St. Paul’s College
         </p>
 
       </div>

@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import clientPromise from "@/lib/mongodb";
 import jwt from "jsonwebtoken";
 import { ObjectId } from "mongodb";
+import { createNotification } from "@/lib/notifications";
 
 export async function PATCH(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-
     const { id } = await context.params;
 
     const authHeader = req.headers.get("authorization");
@@ -40,6 +40,34 @@ export async function PATCH(
       );
     }
 
+    // ✅ FETCH LEAVE FIRST (important)
+    const leave: any = await db.collection("leaves").findOne({
+      _id: new ObjectId(id),
+    });
+
+    if (!leave) {
+      return NextResponse.json(
+        { message: "Leave not found" },
+        { status: 404 }
+      );
+    }
+
+    // ✅ prevent re-approval
+    if (leave.approvals?.sfCoordinator === "approved") {
+      return NextResponse.json(
+        { message: "Already approved by SF Coordinator" },
+        { status: 400 }
+      );
+    }
+
+    // ✅ prevent approving rejected leave
+    if (leave.status === "rejected") {
+      return NextResponse.json(
+        { message: "Cannot approve rejected leave" },
+        { status: 400 }
+      );
+    }
+
     const result = await db.collection("leaves").updateOne(
       { _id: new ObjectId(id) },
       {
@@ -49,17 +77,24 @@ export async function PATCH(
       }
     );
 
+    await createNotification({
+      userId: leave.userId,
+      title: "Leave Forwarded",
+      message: `Your ${leave.leaveType} request was approved by SF Coordinator and forwarded to Manager.`,
+      type: "leave",
+      targetId: id,
+    });
+
     return NextResponse.json({
       message: "Leave approved by SF Coordinator",
-      result
+      result,
     });
 
   } catch (error) {
-
     console.error("SF APPROVAL ERROR:", error);
 
     return NextResponse.json(
-      { message: "Server error" },
+      { message: "Unable to approve leave. Please try again." },
       { status: 500 }
     );
   }

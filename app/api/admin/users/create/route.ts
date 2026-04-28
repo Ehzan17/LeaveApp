@@ -31,6 +31,13 @@ export async function POST(req: NextRequest) {
     password: hashedPassword,
     role,
     department: role === "teacher" ? department : null,
+    leaveBalance: {
+  CL: 12,
+  OD: 10,
+  DL: 5,
+  VL: 10,
+  CML: 5
+},
     active: true,
     createdAt: new Date()
   });

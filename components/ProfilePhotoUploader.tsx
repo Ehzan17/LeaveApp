@@ -2,7 +2,8 @@
 
 import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
-import Cropper from "react-easy-crop";
+import { motion } from "framer-motion";
+import toast from "react-hot-toast";
 
 export default function ProfilePhotoUploader({
   currentPhoto,
@@ -11,120 +12,128 @@ export default function ProfilePhotoUploader({
   currentPhoto?: string;
   onUploadSuccess: (url: string) => void;
 }) {
-  const [imageSrc, setImageSrc] = useState<string | null>(null);
-  const [croppedImage, setCroppedImage] = useState<Blob | null>(null);
-  const [crop, setCrop] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
+    const file = acceptedFiles[0];
+    if (!file) return;
+
     const reader = new FileReader();
     reader.onload = () => {
-      setImageSrc(reader.result as string);
+      setPreview(reader.result as string);
     };
-    reader.readAsDataURL(acceptedFiles[0]);
+    reader.readAsDataURL(file);
   }, []);
 
-  const { getRootProps, getInputProps } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: { "image/*": [] },
   });
 
   const uploadImage = async () => {
-    if (!imageSrc) return;
+    if (!preview) return;
 
-    const token = localStorage.getItem("token");
+    try {
+      setUploading(true);
 
-    const response = await fetch(imageSrc);
-    const blob = await response.blob();
+      const token = sessionStorage.getItem("token");
 
-    const formData = new FormData();
-    formData.append("file", blob);
+      const resBlob = await fetch(preview);
+      const blob = await resBlob.blob();
 
-   const res = await fetch("/api/upload-photo", {
-  method: "POST",
-  headers: {
-    Authorization: `Bearer ${token}`,
-  },
-  body: formData,
-});
+      const formData = new FormData();
+      formData.append("file", blob);
 
-if (!res.ok) {
-  console.error("Upload failed");
-  return;
-}
+      const res = await fetch("/api/upload-photo", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
 
-const text = await res.text();
-const data = text ? JSON.parse(text) : null;
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : null;
 
-if (data?.photo) {
-  onUploadSuccess(data.photo);
-  setImageSrc(null);
-}
+      if (!res.ok) {
+        toast.error("Upload failed ❌");
+        return;
+      }
 
-    };
+      const imageUrl = data?.photo || data?.url;
+
+      if (imageUrl) {
+        onUploadSuccess(imageUrl);
+        toast.success("Photo updated 📸");
+        setPreview(null);
+      }
+
+    } catch (err) {
+      console.error(err);
+      toast.error("Something went wrong ⚠️");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col items-center gap-4">
 
-      <div className="w-32 h-32 mx-auto relative">
+      {/* 🔥 Preview Circle */}
+      <motion.div
+        className="w-28 h-28 rounded-full overflow-hidden border-2 border-red-500 shadow-lg"
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+      >
+        <img
+          src={preview || currentPhoto || "/avatar.png"}
+          className="w-full h-full object-cover"
+        />
+      </motion.div>
 
-        {currentPhoto ? (
-          <img
-            src={currentPhoto}
-            className="w-32 h-32 rounded-full object-cover border-2 border-red-600"
-          />
-        ) : (
-          <div className="w-32 h-32 rounded-full bg-gray-700" />
-        )}
-
-      </div>
-
-      {!imageSrc && (
+      {/* 🔥 Dropzone */}
+      {!preview && (
         <div
           {...getRootProps()}
-          className="border-2 border-dashed border-gray-600 p-6 text-center rounded-lg cursor-pointer hover:border-red-500"
+          className={`w-full max-w-xs text-center border-2 border-dashed p-4 rounded-xl cursor-pointer transition-all
+          ${
+            isDragActive
+              ? "border-red-500 bg-red-500/10"
+              : "border-gray-600 hover:border-red-500"
+          }`}
         >
           <input {...getInputProps()} />
-          <p className="text-gray-400">
-            Drag & Drop image here or click to select
+
+          <p className="text-sm text-gray-400">
+            {isDragActive
+              ? "Drop image here 📥"
+              : "Click or drag to upload"}
           </p>
         </div>
       )}
 
-      {imageSrc && (
-        <div className="space-y-4">
+      {/* 🔥 Action Buttons */}
+      {preview && (
+        <div className="flex gap-3 w-full max-w-xs">
 
-          <div className="relative w-full h-64 bg-black">
-            <Cropper
-              image={imageSrc}
-              crop={crop}
-              zoom={zoom}
-              aspect={1}
-              onCropChange={setCrop}
-              onZoomChange={setZoom}
-            />
-          </div>
-
-          <input
-            type="range"
-            min={1}
-            max={3}
-            step={0.1}
-            value={zoom}
-            onChange={(e) => setZoom(Number(e.target.value))}
-            className="w-full"
-          />
+          <button
+            onClick={() => setPreview(null)}
+            className="flex-1 bg-gray-700 hover:bg-gray-600 py-2 rounded-lg text-sm"
+          >
+            Cancel
+          </button>
 
           <button
             onClick={uploadImage}
-            className="w-full bg-red-600 hover:bg-red-700 py-2 rounded-lg"
+            disabled={uploading}
+            className="flex-1 bg-red-600 hover:bg-red-700 py-2 rounded-lg text-sm disabled:opacity-50"
           >
-            Save Photo
+            {uploading ? "Uploading..." : "Save Photo"}
           </button>
 
         </div>
       )}
-
     </div>
   );
 }

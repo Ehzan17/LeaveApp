@@ -22,16 +22,27 @@ export async function GET(req: NextRequest) {
     const client = await clientPromise;
     const db = client.db("teacher_leave_portal");
 
+    const url = new URL(req.url);
+    const role = url.searchParams.get("role");
+    const action = url.searchParams.get("action");
+    const query: any = {};
+
+    if (role && role !== "all") query.role = role;
+    if (action && action !== "all") query.action = action;
+
     const logs = await db
       .collection("activity_logs")
-      .find()
+      .find(query)
       .sort({ createdAt: -1 })
-      .limit(50)
+      .limit(100)
       .toArray();
 
-    return NextResponse.json(logs);
+    return NextResponse.json({ logs });
 
   } catch (error) {
-    return NextResponse.json({ message: "Server error" }, { status: 500 });
+    return NextResponse.json(
+      { message: "Unable to load activity logs." },
+      { status: 500 }
+    );
   }
 }

@@ -38,14 +38,13 @@ export async function GET(req: NextRequest) {
     console.error("GET LEAVES ERROR:", error);
 
     return NextResponse.json(
-      { message: "Server error" },
+      { message: "Unable to load leave requests. Please try again." },
       { status: 500 }
     );
   }
 }
-
 /* =========================
-   POST - Create Leave
+   POST - Create Leave (UPGRADED)
 ========================= */
 export async function POST(req: NextRequest) {
   try {
@@ -67,7 +66,7 @@ export async function POST(req: NextRequest) {
 
     const { from, to, reason, leaveType, session } = await req.json();
 
-    if (!from || !to || !reason) {
+    if (!from || !to || !reason || !leaveType || !session) {
       return NextResponse.json(
         { message: "All fields are required" },
         { status: 400 }
@@ -78,17 +77,91 @@ export async function POST(req: NextRequest) {
       _id: new ObjectId(decoded.userId),
     });
 
-    const department = teacher?.department || null;
+    if (!teacher) {
+      return NextResponse.json(
+        { message: "User not found" },
+        { status: 404 }
+      );
+    }
+
+    const department = teacher.department || null;
 
     const courseType =
-      department === "Physics" ||
-      department === "Mathematics" ||
-      department === "Chemistry" ||
-      department === "Economics" ||
-      department === "English" ||
-      department === "Commerce"
+      ["Physics", "Mathematics", "Chemistry", "Economics", "English", "Commerce"].includes(department)
         ? "aided"
         : "self_financing";
+
+    /* =========================
+       🧠 CALCULATE LEAVE DAYS
+    ========================= */
+
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+
+    if (fromDate > toDate) {
+      return NextResponse.json(
+        { message: "Invalid date range" },
+        { status: 400 }
+      );
+    }
+
+    // total days
+// total days (base)
+let totalDays =
+  (toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24) + 1;
+
+// normalize
+totalDays = Math.floor(totalDays);
+
+// session logic
+if (fromDate.getTime() === toDate.getTime()) {
+  // SAME DAY
+  if (session === "full_day") {
+    totalDays = 1;
+  } else {
+    totalDays = 0.5;
+  }
+} else {
+  // MULTI DAY
+
+  if (session === "full_day") {
+    // no change
+  } else {
+    // FN or AN → subtract half day
+    totalDays = totalDays - 0.5;
+  }
+}
+   /* =========================
+   🧠 CHECK LEAVE BALANCE
+========================= */
+
+const balance = teacher.leaveBalance || {};
+
+// ✅ Step 1: Check if leave type exists
+if (balance[leaveType] === undefined) {
+  return NextResponse.json(
+    { message: "Invalid leave type" },
+    { status: 400 }
+  );
+}
+
+// ✅ Step 2: Check if balance is 0 or not enough
+if (balance[leaveType] <= 0) {
+  return NextResponse.json(
+    { message: `No ${leaveType} leaves left` },
+    { status: 400 }
+  );
+}
+
+if (balance[leaveType] < totalDays) {
+  return NextResponse.json(
+    { message: "Insufficient leave balance" },
+    { status: 400 }
+  );
+}
+    /* =========================
+       CREATE LEAVE
+    ========================= */
 
     const newLeave = {
       userId: new ObjectId(decoded.userId),
@@ -100,12 +173,15 @@ export async function POST(req: NextRequest) {
       reason,
       leaveType,
       session,
+      days: totalDays, // ✅ NEW FIELD
 
-      approvals: {
-        principal: courseType === "aided" ? "pending" : null,
-        sfCoordinator: courseType === "self_financing" ? "pending" : null,
-        manager: courseType === "self_financing" ? "pending" : null,
-      },
+      approvals:
+        courseType === "aided"
+          ? { principal: "pending" }
+          : {
+              sfCoordinator: "pending",
+              manager: "pending",
+            },
 
       status: "pending",
       createdAt: new Date(),
@@ -119,18 +195,19 @@ export async function POST(req: NextRequest) {
       role: decoded.role,
       action: "APPLIED_LEAVE",
       targetType: "leave",
-      message: `${decoded.name} applied for leave from ${from} to ${to}`,
+      message: `${decoded.name} applied ${leaveType} for ${totalDays} day(s)`,
     });
 
     return NextResponse.json(
       { message: "Leave submitted successfully" },
       { status: 201 }
     );
+
   } catch (error) {
     console.error("POST Leave Error:", error);
 
     return NextResponse.json(
-      { message: "Something went wrong" },
+      { message: "Unable to submit leave request. Please try again." },
       { status: 500 }
     );
   }

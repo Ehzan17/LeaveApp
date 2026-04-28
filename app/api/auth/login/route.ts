@@ -23,12 +23,13 @@ export async function POST(req: NextRequest) {
     const user: any = await db.collection("users").findOne({ email });
 
     // User not found
-    if (!user) {
-      return NextResponse.json(
-        { message: "Invalid credentials" },
-        { status: 401 }
-      );
-    }
+   // User not found
+if (!user) {
+  return NextResponse.json(
+    { message: "Invalid credentials" },
+    { status: 401 }
+  );
+}
 
     // 🔴 BLOCK DISABLED USERS
     if (user.active === false) {
@@ -98,4 +99,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+} 

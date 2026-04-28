@@ -1,58 +1,94 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ProfilePhotoUploader from "@/components/ProfilePhotoUploader";
+import { ChevronDown, ChevronUp } from "lucide-react";
+import toast from "react-hot-toast";
+
+const HISTORY_LIMIT = 7;
+
+const formatDate = (date: string) =>
+  new Date(date).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
+const roleStatusClass = (status: string) =>
+  status === "approved"
+    ? "bg-green-600/20 text-green-400"
+    : "bg-red-600/20 text-red-400";
 
 export default function SFCoordinatorDashboard() {
   const [user, setUser] = useState<any>(null);
   const [leaves, setLeaves] = useState<any[]>([]);
+  const [allLeaves, setAllLeaves] = useState<any[]>([]);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
-  try {
-    const token = localStorage.getItem("token");
-    if (!token) return;
+    try {
+      const token = sessionStorage.getItem("token");
+      if (!token) return;
 
-    const userRes = await fetch("/api/profile", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+      const userRes = await fetch("/api/profile", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-    if (userRes.ok) {
-      const userData = await userRes.json();
-      setUser(userData);
+      if (userRes.ok) {
+        const userData = await userRes.json();
+        setUser(userData);
+      }
+
+      const leaveRes = await fetch("/api/leaves/all", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const data = await leaveRes.json();
+      const leaveArray = Array.isArray(data) ? data : [];
+      setAllLeaves(leaveArray);
+
+      const filtered = leaveArray.filter((l: any) => {
+        const course = l.courseType?.toLowerCase().replace("-", "_");
+        const status = l.approvals?.sfCoordinator?.toLowerCase().trim();
+
+        return course === "self_financing" && status === "pending";
+      });
+
+      setLeaves(filtered);
+    } catch (error) {
+      console.error("Fetch Error:", error);
+      setLeaves([]);
+      setAllLeaves([]);
+    } finally {
+      setLoading(false);
     }
-
-    const leaveRes = await fetch("/api/leaves/all", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    const data = await leaveRes.json();
-
-    // ensure array
-    const leaveArray = Array.isArray(data) ? data : [];
-
-    const filtered = leaveArray.filter(
-      (l: any) =>
-        l.courseType === "self_financing" &&
-        l.approvals?.sfCoordinator === "pending"
-    );
-
-    setLeaves(filtered);
-
-  } catch (error) {
-    console.error("Fetch Error:", error);
-    setLeaves([]);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   useEffect(() => {
     fetchData();
   }, []);
 
+  const historyLeaves = useMemo(
+    () =>
+      allLeaves.filter((leave) => {
+        const course = leave.courseType?.toLowerCase().replace("-", "_");
+        const sfStatus = leave.approvals?.sfCoordinator?.toLowerCase().trim();
+
+        return (
+          course === "self_financing" &&
+          (sfStatus === "approved" || sfStatus === "rejected")
+        );
+      }),
+    [allLeaves]
+  );
+
+  const visibleHistory = historyExpanded
+    ? historyLeaves
+    : historyLeaves.slice(0, HISTORY_LIMIT);
+
   const approveLeave = async (id: string) => {
-    const token = localStorage.getItem("token");
+    const token = sessionStorage.getItem("token");
 
     const res = await fetch(`/api/leaves/${id}/sf-approve`, {
       method: "PATCH",
@@ -63,15 +99,16 @@ export default function SFCoordinatorDashboard() {
     });
 
     if (!res.ok) {
-      alert("Failed to approve leave");
+      const data = await res.json().catch(() => null);
+      toast.error(data?.message || "Failed to approve leave");
       return;
     }
 
-    setLeaves((prev) => prev.filter((leave) => leave._id !== id));
+    await fetchData();
   };
 
   const rejectLeave = async (id: string) => {
-    const token = localStorage.getItem("token");
+    const token = sessionStorage.getItem("token");
 
     const res = await fetch(`/api/leaves/${id}/reject`, {
       method: "PATCH",
@@ -82,11 +119,12 @@ export default function SFCoordinatorDashboard() {
     });
 
     if (!res.ok) {
-      alert("Failed to reject leave");
+      const data = await res.json().catch(() => null);
+      toast.error(data?.message || "Failed to reject leave");
       return;
     }
 
-    setLeaves((prev) => prev.filter((leave) => leave._id !== id));
+    await fetchData();
   };
 
   if (loading) {
@@ -95,14 +133,10 @@ export default function SFCoordinatorDashboard() {
 
   return (
     <div className="space-y-8">
-
-      {/* Profile */}
       <div className="bg-[#111] border border-gray-800 rounded-2xl p-6 shadow-xl flex items-center gap-6">
         <ProfilePhotoUploader
           currentPhoto={user?.photo}
-          onUploadSuccess={(url) =>
-            setUser({ ...user, photo: url })
-          }
+          onUploadSuccess={(url) => setUser({ ...user, photo: url })}
         />
 
         <div>
@@ -111,70 +145,141 @@ export default function SFCoordinatorDashboard() {
         </div>
       </div>
 
-      {/* Leave Requests */}
       <div className="bg-[#111] border border-gray-800 rounded-2xl p-6 shadow-xl">
-
         <h2 className="text-xl font-semibold mb-6">
           Self Financing Leave Requests
         </h2>
 
-        <table className="w-full text-sm">
-
-          <thead>
-            <tr className="border-b border-gray-700 text-gray-400">
-              <th className="p-3 text-left">Teacher</th>
-              <th className="p-3 text-left">Department</th>
-              <th className="p-3 text-left">From</th>
-              <th className="p-3 text-left">To</th>
-              <th className="p-3 text-left">Leave</th>
-              <th className="p-3 text-left">Action</th>
-            </tr>
-          </thead>
-
-          <tbody>
-
-            {leaves.map((leave) => (
-              <tr key={leave._id} className="border-b border-gray-800">
-
-                <td className="p-3">{leave.teacherName}</td>
-
-                <td className="p-3">{leave.department}</td>
-
-                <td className="p-3">{leave.from}</td>
-
-                <td className="p-3">{leave.to}</td>
-
-                <td className="p-3 text-xs text-gray-400">
-                  {leave.leaveType} • {leave.session}
-                </td>
-
-                <td className="p-3 space-x-2">
-
-                  <button
-                    onClick={() => approveLeave(leave._id)}
-                    className="bg-green-600 px-3 py-1 rounded text-xs"
-                  >
-                    Approve
-                  </button>
-
-                  <button
-                    onClick={() => rejectLeave(leave._id)}
-                    className="bg-red-600 px-3 py-1 rounded text-xs"
-                  >
-                    Reject
-                  </button>
-
-                </td>
-
+        <div className="w-full overflow-x-auto">
+          <table className="w-full text-sm min-w-[800px]">
+            <thead>
+              <tr className="border-b border-gray-700 text-gray-400">
+                <th className="p-3 text-left">Name</th>
+                <th className="p-3 text-left">From</th>
+                <th className="p-3 text-left">To</th>
+                <th className="p-3 text-left">Type</th>
+                <th className="p-3 text-left">Days</th>
+                <th className="p-3 text-left">Balance</th>
+                <th className="p-3 text-left">Reason</th>
+                <th className="p-3 text-left">Action</th>
               </tr>
-            ))}
+            </thead>
 
-          </tbody>
-
-        </table>
-
+            <tbody>
+              {leaves.map((leave) => (
+                <tr
+                  key={leave._id}
+                  className="border-b border-gray-800 hover:bg-[#1a1a1a]"
+                >
+                  <td className="p-3 font-medium">{leave.teacherName}</td>
+                  <td className="p-3">{formatDate(leave.from)}</td>
+                  <td className="p-3">{formatDate(leave.to)}</td>
+                  <td className="p-3 text-blue-400 font-medium">
+                    {leave.leaveType}
+                  </td>
+                  <td className="p-3">{leave.days}</td>
+                  <td className="p-3 text-yellow-400">
+                    {leave.leaveBalance?.[leave.leaveType] ?? "-"}
+                  </td>
+                  <td className="p-3">
+                    <div>{leave.reason}</div>
+                    <div className="text-xs text-gray-400 mt-1">
+                      {leave.session}
+                    </div>
+                  </td>
+                  <td className="p-3 space-x-2">
+                    <button
+                      onClick={() => approveLeave(leave._id)}
+                      className="bg-green-600 px-3 py-1 rounded text-xs hover:bg-green-500"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => rejectLeave(leave._id)}
+                      className="bg-red-600 px-3 py-1 rounded text-xs hover:bg-red-500"
+                    >
+                      Reject
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
+      <div className="bg-[#111] border border-gray-800 rounded-2xl p-6 shadow-xl">
+        <h2 className="text-xl font-semibold mb-6">My Decisions</h2>
+
+        <div className="w-full overflow-x-auto">
+          <table className="w-full text-sm min-w-[800px]">
+            <thead>
+              <tr className="border-b border-gray-700 text-gray-400">
+                <th className="p-3 text-left">Name</th>
+                <th className="p-3 text-left">From</th>
+                <th className="p-3 text-left">To</th>
+                <th className="p-3 text-left">Type</th>
+                <th className="p-3 text-left">Days</th>
+                <th className="p-3 text-left">Balance</th>
+                <th className="p-3 text-left">Reason</th>
+                <th className="p-3 text-left">Status</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {visibleHistory.map((leave) => {
+                const sfStatus =
+                  leave.approvals?.sfCoordinator?.toLowerCase().trim() || "";
+
+                return (
+                  <tr
+                    key={leave._id}
+                    className="border-b border-gray-800 hover:bg-[#1a1a1a]"
+                  >
+                    <td className="p-3 font-medium">{leave.teacherName}</td>
+                    <td className="p-3">{formatDate(leave.from)}</td>
+                    <td className="p-3">{formatDate(leave.to)}</td>
+                    <td className="p-3 text-blue-400 font-medium">
+                      {leave.leaveType}
+                    </td>
+                    <td className="p-3">{leave.days}</td>
+                    <td className="p-3 text-yellow-400">
+                      {leave.leaveBalance?.[leave.leaveType] ?? "-"}
+                    </td>
+                    <td className="p-3">
+                      <div>{leave.reason}</div>
+                      <div className="text-xs text-gray-400 mt-1">
+                        {leave.session}
+                      </div>
+                    </td>
+                    <td className="p-3">
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs ${roleStatusClass(
+                          sfStatus
+                        )}`}
+                      >
+                        {sfStatus}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {historyLeaves.length > HISTORY_LIMIT && (
+          <div className="flex justify-end pt-4">
+            <button
+              onClick={() => setHistoryExpanded((value) => !value)}
+              className="inline-flex items-center gap-2 rounded bg-gray-800 px-3 py-2 text-sm hover:bg-gray-700"
+            >
+              {historyExpanded ? "Show less" : "Show all"}
+              {historyExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

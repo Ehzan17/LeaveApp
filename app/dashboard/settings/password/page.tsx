@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import toast from "react-hot-toast";
 
 export default function ChangePassword() {
   const [form, setForm] = useState({
@@ -10,30 +11,27 @@ export default function ChangePassword() {
   });
 
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
 
   const handleChange = async () => {
-    setMessage("");
-
     if (!form.oldPassword || !form.newPassword || !form.confirmPassword) {
-      setMessage("All fields are required");
+      toast.error("All fields are required ❌");
       return;
     }
 
     if (form.newPassword.length < 6) {
-      setMessage("New password must be at least 6 characters");
+      toast.error("Password must be at least 6 characters ❌");
       return;
     }
 
     if (form.newPassword !== form.confirmPassword) {
-      setMessage("Passwords do not match");
+      toast.error("Passwords do not match ❌");
       return;
     }
 
     try {
       setLoading(true);
 
-      const token = localStorage.getItem("token");
+      const token = sessionStorage.getItem("token");
 
       const res = await fetch("/api/change-password", {
         method: "PUT",
@@ -50,9 +48,9 @@ export default function ChangePassword() {
       const data = await res.json();
 
       if (!res.ok) {
-        setMessage(data.message);
+        toast.error(data.message || "Failed to update password ❌");
       } else {
-        setMessage("Password updated successfully ✅");
+        toast.success("Password updated successfully ✅");
         setForm({
           oldPassword: "",
           newPassword: "",
@@ -60,64 +58,70 @@ export default function ChangePassword() {
         });
       }
 
-    } catch (error) {
-      setMessage("Something went wrong");
+    } catch {
+      toast.error("Something went wrong ⚠️");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-md bg-[#111] border border-gray-800 p-6 rounded-xl shadow-lg">
+    <div className="min-h-[80vh] flex items-center justify-center px-4">
 
-      <h2 className="text-2xl mb-6 font-semibold">Change Password</h2>
+      {/* Glow BG */}
+      <div className="absolute w-[400px] h-[400px] bg-red-600/20 rounded-full blur-3xl -top-20 -left-20"></div>
+      <div className="absolute w-[400px] h-[400px] bg-blue-600/20 rounded-full blur-3xl bottom-0 right-0"></div>
 
-      <div className="space-y-4">
+      {/* Card */}
+      <div className="relative z-10 w-full max-w-md bg-[#111827]/80 backdrop-blur-xl border border-gray-800 p-8 rounded-2xl shadow-2xl space-y-6">
 
-        <input
-          type="password"
-          placeholder="Old Password"
-          value={form.oldPassword}
-          className="w-full bg-black border border-gray-700 p-3 rounded-lg focus:border-red-500 outline-none"
-          onChange={(e) =>
-            setForm({ ...form, oldPassword: e.target.value })
-          }
-        />
+        <h2 className="text-2xl font-semibold text-center">
+          Change Password
+        </h2>
 
-        <input
-          type="password"
-          placeholder="New Password"
-          value={form.newPassword}
-          className="w-full bg-black border border-gray-700 p-3 rounded-lg focus:border-red-500 outline-none"
-          onChange={(e) =>
-            setForm({ ...form, newPassword: e.target.value })
-          }
-        />
+        <div className="space-y-4">
 
-        <input
-          type="password"
-          placeholder="Confirm New Password"
-          value={form.confirmPassword}
-          className="w-full bg-black border border-gray-700 p-3 rounded-lg focus:border-red-500 outline-none"
-          onChange={(e) =>
-            setForm({ ...form, confirmPassword: e.target.value })
-          }
-        />
+          <input
+            type="password"
+            placeholder="Old Password"
+            value={form.oldPassword}
+            onChange={(e) =>
+              setForm({ ...form, oldPassword: e.target.value })
+            }
+            className="w-full px-4 py-3 bg-[#0b0f19] border border-gray-700 rounded-lg focus:ring-2 focus:ring-red-500"
+          />
 
-        {message && (
-          <p className="text-sm text-red-400">{message}</p>
-        )}
+          <input
+            type="password"
+            placeholder="New Password"
+            value={form.newPassword}
+            onChange={(e) =>
+              setForm({ ...form, newPassword: e.target.value })
+            }
+            className="w-full px-4 py-3 bg-[#0b0f19] border border-gray-700 rounded-lg focus:ring-2 focus:ring-red-500"
+          />
 
-        <button
-          onClick={handleChange}
-          disabled={loading}
-          className="w-full bg-red-600 hover:bg-red-700 py-3 rounded-lg transition-all disabled:opacity-50"
-        >
-          {loading ? "Updating..." : "Update Password"}
-        </button>
+          <input
+            type="password"
+            placeholder="Confirm Password"
+            value={form.confirmPassword}
+            onChange={(e) =>
+              setForm({ ...form, confirmPassword: e.target.value })
+            }
+            className="w-full px-4 py-3 bg-[#0b0f19] border border-gray-700 rounded-lg focus:ring-2 focus:ring-red-500"
+          />
+
+          <button
+            onClick={handleChange}
+            disabled={loading}
+            className="w-full py-3 bg-red-600 hover:bg-red-700 rounded-lg font-medium transition disabled:opacity-50"
+          >
+            {loading ? "Updating..." : "Update Password"}
+          </button>
+
+        </div>
 
       </div>
-
     </div>
   );
 }

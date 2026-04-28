@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 
 export default function DashboardPage() {
   const [user, setUser] = useState<any>(null);
@@ -12,7 +13,7 @@ export default function DashboardPage() {
   });
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const token = sessionStorage.getItem("token");
 
     fetch("/api/profile", {
       headers: { Authorization: `Bearer ${token}` },
@@ -28,7 +29,7 @@ export default function DashboardPage() {
   }, []);
 
   const handleSubmit = async () => {
-    const token = localStorage.getItem("token");
+    const token = sessionStorage.getItem("token");
 
     await fetch("/api/leaves", {
       method: "POST",
@@ -39,7 +40,7 @@ export default function DashboardPage() {
       body: JSON.stringify(form),
     });
 
-    alert("Leave submitted");
+    toast.success("Leave submitted");
     window.location.reload();
   };
 
@@ -135,8 +136,8 @@ export default function DashboardPage() {
             <tbody>
               {leaves.map((leave) => (
                 <tr key={leave._id} className="border-b border-gray-800 hover:bg-[#1a1a1a]">
-                  <td className="p-3">{leave.from}</td>
-                  <td className="p-3">{leave.to}</td>
+                  <td className="p-3">{new Date(leave.from).toLocaleDateString()}</td>
+                  <td className="p-3">{new Date(leave.to).toLocaleDateString()}</td>
                   <td className="p-3">{leave.reason}</td>
                   <td className="p-3">{leave.status}</td>
                   <td className="p-3">
