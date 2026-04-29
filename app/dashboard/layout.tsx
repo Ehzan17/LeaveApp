@@ -6,7 +6,6 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { Bell, Menu, X } from "lucide-react";
 import toast from "react-hot-toast";
-import "react-datepicker/dist/react-datepicker.css";
 
 export default function DashboardLayout({
   children,
