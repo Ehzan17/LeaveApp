@@ -69,7 +69,11 @@ export async function PATCH(
     }
 
     const result = await db.collection("leaves").updateOne(
-      { _id: new ObjectId(id) },
+      {
+        _id: new ObjectId(id),
+        status: { $ne: "rejected" },
+        "approvals.sfCoordinator": "pending",
+      },
       {
         $set: {
           "approvals.sfCoordinator": "approved"
@@ -77,13 +81,24 @@ export async function PATCH(
       }
     );
 
-    await createNotification({
-      userId: leave.userId,
-      title: "Leave Forwarded",
-      message: `Your ${leave.leaveType} request was approved by SF Coordinator and forwarded to Manager.`,
-      type: "leave",
-      targetId: id,
-    });
+    if (result.modifiedCount === 0) {
+      return NextResponse.json(
+        { message: "This leave has already been handled" },
+        { status: 409 }
+      );
+    }
+
+    try {
+      await createNotification({
+        userId: leave.userId,
+        title: "Leave Forwarded",
+        message: `Your ${leave.leaveType} request was approved by SF Coordinator and forwarded to Manager.`,
+        type: "leave",
+        targetId: id,
+      });
+    } catch (sideEffectError) {
+      console.error("SF APPROVAL SIDE EFFECT ERROR:", sideEffectError);
+    }
 
     return NextResponse.json({
       message: "Leave approved by SF Coordinator",

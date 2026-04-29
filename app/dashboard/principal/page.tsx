@@ -8,6 +8,7 @@ export default function PrincipalDashboard() {
   const [user, setUser] = useState<any>(null);
   const [leaves, setLeaves] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
 
   const fetchData = async () => {
     try {
@@ -60,6 +61,9 @@ export default function PrincipalDashboard() {
   const updateStatus = async (id: string, status: string) => {
   const token = sessionStorage.getItem("token");
 
+  if (pendingAction) return;
+  setPendingAction(id);
+
   const res = await fetch(`/api/leaves/${id}`, {
     method: "PATCH",
     headers: {
@@ -72,15 +76,25 @@ export default function PrincipalDashboard() {
   if (!res.ok) {
     const data = await res.json().catch(() => null);
     toast.error(data?.message || "Failed to update leave");
+    setPendingAction(null);
     return;
   }
 
   // 🔥 Instantly update UI
   setLeaves((prev) =>
     prev.map((leave) =>
-      leave._id === id ? { ...leave, status } : leave
+      leave._id === id
+        ? {
+            ...leave,
+            status,
+            approvals: { ...leave.approvals, principal: status },
+          }
+        : leave
     )
   );
+  toast.success(status === "approved" ? "Leave approved" : "Leave rejected");
+  fetchData();
+  setPendingAction(null);
 };
   const pendingCount = leaves.filter(l => l.status === "pending").length;
   const approvedCount = leaves.filter(l => l.status === "approved").length;
@@ -218,14 +232,16 @@ export default function PrincipalDashboard() {
               <>
                 <button
                   onClick={() => updateStatus(leave._id, "approved")}
-                  className="bg-green-600 px-3 py-1 rounded text-xs hover:bg-green-500"
+                  disabled={pendingAction === leave._id}
+                  className="bg-green-600 px-3 py-1 rounded text-xs hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Approve
+                  {pendingAction === leave._id ? "Working..." : "Approve"}
                 </button>
 
                 <button
                   onClick={() => updateStatus(leave._id, "rejected")}
-                  className="bg-red-600 px-3 py-1 rounded text-xs hover:bg-red-500"
+                  disabled={pendingAction === leave._id}
+                  className="bg-red-600 px-3 py-1 rounded text-xs hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Reject
                 </button>

@@ -25,6 +25,7 @@ export default function ManagerDashboard() {
   const [allLeaves, setAllLeaves] = useState<any[]>([]);
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
 
   const fetchData = async () => {
     const token = sessionStorage.getItem("token");
@@ -99,40 +100,76 @@ export default function ManagerDashboard() {
   const approveLeave = async (id: string) => {
     const token = sessionStorage.getItem("token");
 
-    const res = await fetch(`/api/leaves/${id}/manager-approve`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    const data = await res.json();
+    setPendingAction(id);
+    try {
+      const res = await fetch(`/api/leaves/${id}/manager-approve`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json().catch(() => null);
 
-    if (!res.ok) {
-      toast.error(data.message || "Unable to approve leave");
-      return;
+      if (!res.ok) {
+        toast.error(data?.message || "Unable to approve leave");
+        return;
+      }
+
+      setLeaves((prev) => prev.filter((leave) => leave._id !== id));
+      setAllLeaves((prev) =>
+        prev.map((leave) =>
+          leave._id === id
+            ? {
+                ...leave,
+                status: "approved",
+                approvals: { ...leave.approvals, manager: "approved" },
+              }
+            : leave
+        )
+      );
+      toast.success("Leave approved");
+      fetchData();
+    } finally {
+      setPendingAction(null);
     }
-
-    await fetchData();
   };
 
   const rejectLeave = async (id: string) => {
     const token = sessionStorage.getItem("token");
 
-    const res = await fetch(`/api/leaves/${id}/reject`, {
-      method: "PATCH",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    setPendingAction(id);
+    try {
+      const res = await fetch(`/api/leaves/${id}/reject`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-    if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      toast.error(data?.message || "Rejection failed");
-      return;
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        toast.error(data?.message || "Rejection failed");
+        return;
+      }
+
+      setLeaves((prev) => prev.filter((leave) => leave._id !== id));
+      setAllLeaves((prev) =>
+        prev.map((leave) =>
+          leave._id === id
+            ? {
+                ...leave,
+                status: "rejected",
+                approvals: { ...leave.approvals, manager: "rejected" },
+              }
+            : leave
+        )
+      );
+      toast.success("Leave rejected");
+      fetchData();
+    } finally {
+      setPendingAction(null);
     }
-
-    await fetchData();
   };
 
   if (loading) {
@@ -172,7 +209,10 @@ export default function ManagerDashboard() {
             </thead>
 
             <tbody>
-              {leaves.map((leave) => (
+              {leaves.map((leave) => {
+                const isSubmitting = pendingAction === leave._id;
+
+                return (
                 <tr
                   key={leave._id}
                   className="border-b border-gray-800 hover:bg-[#1a1a1a]"
@@ -196,19 +236,22 @@ export default function ManagerDashboard() {
                   <td className="p-3 space-x-2">
                     <button
                       onClick={() => approveLeave(leave._id)}
-                      className="bg-green-600 px-3 py-1 rounded text-xs hover:bg-green-500"
+                      disabled={isSubmitting}
+                      className="bg-green-600 px-3 py-1 rounded text-xs hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      Approve
+                      {isSubmitting ? "Working..." : "Approve"}
                     </button>
                     <button
                       onClick={() => rejectLeave(leave._id)}
-                      className="bg-red-600 px-3 py-1 rounded text-xs hover:bg-red-500"
+                      disabled={isSubmitting}
+                      className="bg-red-600 px-3 py-1 rounded text-xs hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Reject
                     </button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

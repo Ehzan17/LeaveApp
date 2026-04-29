@@ -74,67 +74,86 @@ export async function PATCH(
     const referenceId = `REF-${Date.now()}`;
 
     if (status === "rejected") {
-      const pdfUrl = await generateLeaveLetter({
-        teacherName: teacher.name,
-        teacherEmail: teacher.email,
-        department: teacher.department,
-        designation: teacher.designation,
-        fromDate: leave.from,
-        toDate: leave.to,
-        reason: leave.reason,
-        days: leave.days,
-        balance: teacher.leaveBalance?.[leave.leaveType] || 0,
-        usedLeaves: 0,
-        lastLeave: "-",
-        status: "rejected",
-        referenceId,
-      });
-
-      await sendLeaveEmail({
-        to: teacher.email,
-        teacherName: teacher.name,
-        status: "rejected",
-        pdfPath: pdfUrl,
-        leaveDetails: {
-          fromDate: leave.from,
-          toDate: leave.to,
-          leaveType: leave.leaveType,
-          days: leave.days,
-          reason: leave.reason,
-          referenceId,
-        },
-      });
-
-      await db.collection("leaves").updateOne(
-        { _id: new ObjectId(id) },
+      const claimResult = await db.collection("leaves").updateOne(
+        { _id: new ObjectId(id), status: "pending" },
         {
           $set: {
             status: "rejected",
             "approvals.principal": "rejected",
             reviewedBy: auth.userId,
             reviewedAt: new Date(),
-            pdfUrl,
           },
         }
       );
 
-      await logActivity({
-        userId: auth.userId,
-        userName: auth.userName || "Principal",
-        role: "principal",
-        action: "REJECTED_LEAVE",
-        targetId: id,
-        targetType: "leave",
-        message: `${teacher.name}'s leave was rejected`,
-      });
+      if (claimResult.modifiedCount === 0) {
+        return NextResponse.json(
+          { message: "This leave has already been handled" },
+          { status: 409 }
+        );
+      }
 
-      await createNotification({
-        userId: leave.userId,
-        title: "Leave Rejected",
-        message: `Your ${leave.leaveType} request was rejected by Principal.`,
-        type: "leave",
-        targetId: id,
-      });
+      try {
+        const pdfUrl = await generateLeaveLetter({
+          teacherName: teacher.name,
+          teacherEmail: teacher.email,
+          department: teacher.department,
+          designation: teacher.designation,
+          fromDate: leave.from,
+          toDate: leave.to,
+          reason: leave.reason,
+          days: leave.days,
+          balance: teacher.leaveBalance?.[leave.leaveType] || 0,
+          usedLeaves: 0,
+          lastLeave: "-",
+          status: "rejected",
+          referenceId,
+        });
+
+        await sendLeaveEmail({
+          to: teacher.email,
+          teacherName: teacher.name,
+          status: "rejected",
+          pdfPath: pdfUrl,
+          leaveDetails: {
+            fromDate: leave.from,
+            toDate: leave.to,
+            leaveType: leave.leaveType,
+            days: leave.days,
+            reason: leave.reason,
+            referenceId,
+          },
+        });
+
+        await db.collection("leaves").updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: {
+              pdfUrl,
+            },
+          }
+        );
+
+        await logActivity({
+          userId: auth.userId,
+          userName: auth.userName || "Principal",
+          role: "principal",
+          action: "REJECTED_LEAVE",
+          targetId: id,
+          targetType: "leave",
+          message: `${teacher.name}'s leave was rejected`,
+        });
+
+        await createNotification({
+          userId: leave.userId,
+          title: "Leave Rejected",
+          message: `Your ${leave.leaveType} request was rejected by Principal.`,
+          type: "leave",
+          targetId: id,
+        });
+      } catch (sideEffectError) {
+        console.error("PRINCIPAL REJECTION SIDE EFFECT ERROR:", sideEffectError);
+      }
 
       return NextResponse.json({
         message: "Leave rejected successfully",
@@ -159,8 +178,30 @@ export async function PATCH(
       );
     }
 
-    await db.collection("users").updateOne(
-      { _id: leave.userId },
+    const claimResult = await db.collection("leaves").updateOne(
+      { _id: new ObjectId(id), status: "pending" },
+      {
+        $set: {
+          status: "approved",
+          "approvals.principal": "approved",
+          reviewedBy: auth.userId,
+          reviewedAt: new Date(),
+        },
+      }
+    );
+
+    if (claimResult.modifiedCount === 0) {
+      return NextResponse.json(
+        { message: "This leave has already been handled" },
+        { status: 409 }
+      );
+    }
+
+    const balanceResult = await db.collection("users").updateOne(
+      {
+        _id: leave.userId,
+        [`leaveBalance.${leaveType}`]: { $gte: leaveDays },
+      },
       {
         $inc: {
           [`leaveBalance.${leaveType}`]: -leaveDays,
@@ -168,80 +209,101 @@ export async function PATCH(
       }
     );
 
-    const pdfUrl = await generateLeaveLetter({
-      teacherName: teacher.name,
-      teacherEmail: teacher.email,
-      department: teacher.department,
-      designation: teacher.designation,
-      fromDate: leave.from,
-      toDate: leave.to,
-      reason: leave.reason,
-      days: leave.days,
-      balance: currentBalance - leaveDays,
-      usedLeaves: 0,
-      lastLeave: "-",
-      status: "approved",
-      referenceId,
-    });
+    if (balanceResult.modifiedCount === 0) {
+      await db.collection("leaves").updateOne(
+        { _id: new ObjectId(id) },
+        {
+          $set: {
+            status: "pending",
+            "approvals.principal": "pending",
+          },
+          $unset: {
+            reviewedBy: "",
+            reviewedAt: "",
+          },
+        }
+      );
 
-    await sendLeaveEmail({
-      to: teacher.email,
-      teacherName: teacher.name,
-      status: "approved",
-      pdfPath: pdfUrl,
-      leaveDetails: {
+      return NextResponse.json(
+        { message: "Insufficient leave balance" },
+        { status: 400 }
+      );
+    }
+
+    try {
+      const pdfUrl = await generateLeaveLetter({
+        teacherName: teacher.name,
+        teacherEmail: teacher.email,
+        department: teacher.department,
+        designation: teacher.designation,
         fromDate: leave.from,
         toDate: leave.to,
-        leaveType: leave.leaveType,
-        days: leave.days,
         reason: leave.reason,
+        days: leave.days,
+        balance: currentBalance - leaveDays,
+        usedLeaves: 0,
+        lastLeave: "-",
+        status: "approved",
         referenceId,
-      },
-    });
+      });
 
-    await db.collection("leaves").updateOne(
-      { _id: new ObjectId(id) },
-      {
-        $set: {
-          status: "approved",
-          "approvals.principal": "approved",
-          reviewedBy: auth.userId,
-          reviewedAt: new Date(),
-          pdfUrl,
+      await sendLeaveEmail({
+        to: teacher.email,
+        teacherName: teacher.name,
+        status: "approved",
+        pdfPath: pdfUrl,
+        leaveDetails: {
+          fromDate: leave.from,
+          toDate: leave.to,
+          leaveType: leave.leaveType,
+          days: leave.days,
+          reason: leave.reason,
+          referenceId,
         },
-      }
-    );
+      });
 
-    await logActivity({
-      userId: auth.userId,
-      userName: auth.userName || "Principal",
-      role: "principal",
-      action: "APPROVED_LEAVE",
-      targetId: id,
-      targetType: "leave",
-      message: `${teacher.name}'s leave was approved`,
-    });
+      await db.collection("leaves").updateOne(
+        { _id: new ObjectId(id) },
+        {
+          $set: {
+            pdfUrl,
+          },
+        }
+      );
 
-    await createNotification({
-      userId: leave.userId,
-      title: "Leave Approved",
-      message: `Your ${leave.leaveType} request was approved by Principal.`,
-      type: "leave",
-      targetId: id,
-    });
+      await logActivity({
+        userId: auth.userId,
+        userName: auth.userName || "Principal",
+        role: "principal",
+        action: "APPROVED_LEAVE",
+        targetId: id,
+        targetType: "leave",
+        message: `${teacher.name}'s leave was approved`,
+      });
 
-    if (currentBalance - leaveDays <= 2) {
       await createNotification({
         userId: leave.userId,
-        title: "Leave Balance Low",
-        message: `Your ${leaveType} balance is now ${currentBalance - leaveDays}.`,
-        type: "balance",
+        title: "Leave Approved",
+        message: `Your ${leave.leaveType} request was approved by Principal.`,
+        type: "leave",
         targetId: id,
       });
+
+      if (currentBalance - leaveDays <= 2) {
+        await createNotification({
+          userId: leave.userId,
+          title: "Leave Balance Low",
+          message: `Your ${leaveType} balance is now ${currentBalance - leaveDays}.`,
+          type: "balance",
+          targetId: id,
+        });
+      }
+    } catch (sideEffectError) {
+      console.error("PRINCIPAL APPROVAL SIDE EFFECT ERROR:", sideEffectError);
     }
 
     return NextResponse.json({
-      message: "Leave approved and deducted successfully",
+      message: "Leave approved successfully",
     });
   } catch (error) {
     console.error("LEAVE STATUS UPDATE ERROR:", error);

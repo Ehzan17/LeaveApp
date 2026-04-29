@@ -4,6 +4,14 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { logActivity } from "@/lib/activityLogger";
 
+function isMongoConnectionError(error: any) {
+  return (
+    error?.code === "ECONNREFUSED" ||
+    error?.name === "MongoNetworkError" ||
+    String(error?.message || "").includes("querySrv")
+  );
+}
+
 export async function POST(req: NextRequest) {
   try {
 
@@ -88,9 +96,23 @@ if (!user) {
     });
 
   } catch (error: any) {
+    if (isMongoConnectionError(error)) {
+      console.error("LOGIN DB CONNECTION ERROR:", {
+        code: error.code,
+        hostname: error.hostname,
+        message: error.message,
+      });
+
+      return NextResponse.json(
+        {
+          message:
+            "Database connection failed. Check your internet connection, DNS, and MongoDB Atlas Network Access settings.",
+        },
+        { status: 503 }
+      );
+    }
 
     console.error("LOGIN ERROR:", error);
-
     return NextResponse.json(
       {
         message: "Something went wrong",
